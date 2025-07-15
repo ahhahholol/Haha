@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Info Logger (With Consent)</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 20px;
+      color: white;
+      background: linear-gradient(270deg, red, orange, yellow, green, blue, indigo, violet);
+      background-size: 1400% 1400%;
+      animation: rainbow 20s linear infinite;
+    }
+    @keyframes rainbow {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    #info {
+      margin-top: 20px;
+      font-size: 18px;
+      line-height: 1.6;
+    }
+    button {
+      margin-top: 20px;
+      padding: 15px 40px;
+      font-size: 18px;
+      background-color: #4CAF50;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      color: white;
+    }
+    input[type="checkbox"] {
+      transform: scale(1.2);
+      margin-right: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>✨ Funny Info Logger ✨</h1>
+  <p>Click below to share your info with us — just for fun! 🌐💻</p>
+
+  <label>
+    <input type="checkbox" id="consentCheckbox" />
+    I agree to share my IP, location, and browser info
+  </label>
+
+  <div id="info"></div>
+  <button id="goBtn">🚀 Get My Info & Speak</button>
+  <button id="sendBtn" style="display:none;">📤 Send to Discord</button>
+
+  <script>
+    const goBtn = document.getElementById("goBtn");
+    const sendBtn = document.getElementById("sendBtn");
+    const infoDiv = document.getElementById("info");
+    const checkbox = document.getElementById("consentCheckbox");
+
+    let collectedData = {};
+
+    async function speak(text) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      const voices = window.speechSynthesis.getVoices();
+      const preferred = voices.find(v => v.name.toLowerCase().includes("female") || v.name.toLowerCase().includes("siri"));
+      if (preferred) utterance.voice = preferred;
+      utterance.pitch = 1;
+      utterance.rate = 1;
+      window.speechSynthesis.speak(utterance);
+    }
+
+    goBtn.onclick = async () => {
+      if (!checkbox.checked) {
+        alert("Please check the box to agree first.");
+        return;
+      }
+
+      goBtn.disabled = true;
+      goBtn.textContent = "⏳ Gathering info...";
+
+      try {
+        const ipResp = await fetch("https://api.ipify.org?format=json");
+        const ipData = await ipResp.json();
+        const ip = ipData.ip;
+        collectedData.ip = ip;
+
+        const userAgent = navigator.userAgent;
+        collectedData.device = userAgent;
+
+        const coords = await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(
+            pos => resolve(pos.coords),
+            err => resolve(null), // allow fallback if denied
+            { enableHighAccuracy: true, timeout: 10000 }
+          );
+        });
+
+        if (coords) {
+          collectedData.lat = coords.latitude;
+          collectedData.lon = coords.longitude;
+          collectedData.map = `https://www.google.com/maps?q=${coords.latitude},${coords.longitude}`;
+        } else {
+          collectedData.lat = "Location permission denied";
+          collectedData.lon = "N/A";
+          collectedData.map = "N/A";
+        }
+
+        // Display collected info
+        infoDiv.innerHTML = `
+          <strong>IP:</strong> ${collectedData.ip}<br>
+          <strong>Location:</strong> ${collectedData.lat}, ${collectedData.lon}<br>
+          <strong>Google Maps:</strong> <a href="${collectedData.map}" target="_blank">${collectedData.map}</a><br>
+          <strong>Device Info:</strong> ${collectedData.device}
+        `;
+
+        speak(`Thanks! Your IP address is ${collectedData.ip}`);
+
+        sendBtn.style.display = "inline-block";
+        goBtn.textContent = "✔ Info Ready";
+
+      } catch (err) {
+        alert("Something went wrong.");
+        console.error(err);
+        goBtn.disabled = false;
+      }
+    };
+
+    sendBtn.onclick = async () => {
+      sendBtn.disabled = true;
+      sendBtn.textContent = "📡 Sending...";
+
+      const payload = {
+        username: "Fun Logger",
+        embeds: [{
+          title: "New Visitor Info",
+          color: 0x00ffff,
+          fields: [
+            { name: "IP Address", value: collectedData.ip || "Unknown", inline: false },
+            { name: "Location", value: `${collectedData.lat}, ${collectedData.lon}`, inline: false },
+            { name: "Map", value: collectedData.map || "N/A", inline: false },
+            { name: "Device", value: collectedData.device || "Unknown", inline: false },
+          ],
+          timestamp: new Date().toISOString()
+        }]
+      };
+
+      try {
+        await fetch("YOUR_DISCORD_WEBHOOK_URL", { // replace this
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        sendBtn.textContent = "✅ Sent!";
+      } catch (err) {
+        alert("Failed to send to Discord.");
+        console.error(err);
+        sendBtn.disabled = false;
+        sendBtn.textContent = "📤 Send to Discord";
+      }
+    };
+  </script>
+
+</body>
+</html>
